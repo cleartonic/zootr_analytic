@@ -1,0 +1,446 @@
+import psycopg2, pandas as pd, numpy as np
+import yaml
+with open('config.yaml') as f:
+    config = yaml.safe_load(f)
+    
+from IPython.display import display
+
+
+
+pd.options.display.max_columns = 10
+pd.options.display.max_rows = 100
+
+region_lookup = pd.read_csv("ref/region_lookup.csv").set_index("location").to_dict()['region']
+
+songs = ['Song from Impa',
+ 'Song from Malon',
+ 'Song from Saria',
+ 'Song from Composers Grave',
+ 'Song from Ocarina of Time',
+ 'Song from Windmill',
+ 'Sheik in Forest',
+ 'Sheik in Crater',
+ 'Sheik in Ice Cavern',
+ 'Sheik at Colossus',
+ 'Sheik in Kakariko',
+ 'Sheik at Temple']
+
+stones_medallions = ['Links Pocket', 'Queen Gohma', 'King Dodongo', 'Barinade', 'Phantom Ganon', 'Volvagia', 'Morpha', 'Bongo Bongo', 'Twinrova']
+
+def create_pandas_table(sql_query):
+    # Create a new cursor
+    conn = psycopg2.connect(
+    host="localhost",
+    database=config['db_name'],
+    user=config['db_user'],
+    password=config['db_pass'])
+    
+    cur = conn.cursor()
+    table = pd.read_sql_query(sql_query, conn)
+    # Close the cursor and connection to so the server can allocate
+    # bandwidth to other requests
+    cur.close()
+    conn.close()
+    return table
+
+def b1():
+    df_source = create_pandas_table("SELECT * FROM public.barren_regions")
+    seeds_num = len(df_source['seed'].unique())
+
+    df = df_source.copy()
+    df['count'] = 1
+    df['pct'] = 100 / seeds_num
+    df_piv = df.pivot_table(index=['location'],values=['count','pct'],aggfunc=np.sum)
+    df_piv = df_piv.sort_values(by='count',ascending=False)
+    print("\nBarren regions:\nThis is NOT the gossip hint system, this is given per the spoiler. The hints are picked from barren regions from this list.\nRead 'count' column as number of seeds that have X region as a barren region.\nNotice how songs areas are never barren. Same goes for barren hints. It appears the randomization engine avoids dealing with this song problem entirely by avoiding hints at those regions altogether.")
+    print(df_piv.to_markdown())
+
+
+
+
+
+
+
+
+
+
+def b2():
+
+    # All woth locations
+    df_source = create_pandas_table("SELECT * FROM public.woth_locations")
+    seeds_num = len(df_source['seed'].unique())
+
+    df = df_source.copy()
+    df['region'] = df['location'].apply(lambda x: region_lookup[x] if x in region_lookup.keys() else "NULL")
+    df['overall'] = 100 / seeds_num
+    
+    df_piv1 = df.pivot_table(index=['seed','region'],values='overall')
+    df_piv1['overall'] = 100 / seeds_num
+    
+    df_piv = df_piv1.pivot_table(index=['region'],values='overall',aggfunc=np.sum)
+    df_piv = df_piv.sort_values(by='overall',ascending=False)
+    for col in df_piv.columns:
+        df_piv[col] = df_piv[col].apply(lambda x: round(x,2))
+    
+    # Woth locations without songs
+
+    df = df_source.copy()
+    def apply_song(location):
+        if location in songs:
+            return "song"
+        else:
+            return "non-song"
+    
+    # df = df[~df['location'].isin(songs)]
+    df['song_status'] = df['location'].apply(apply_song)
+    df['region'] = df['location'].apply(lambda x: region_lookup[x] if x in region_lookup.keys() else "NULL")
+    
+    df['pct'] = 100 / seeds_num
+    
+    df_piv1 = df.pivot_table(index=['seed','region'],columns=['song_status'],values='pct')
+    df_piv1['pct'] = 100 / seeds_num
+    df_piv1 = df_piv1.fillna(0)
+    
+    df_woth = df_piv1.pivot_table(index=['region'],values=['song','non-song','pct'],aggfunc=np.sum)[['song','non-song','pct']]
+    
+    df_woth = df_woth.sort_values(by='pct',ascending=False)
+    for col in df_woth.columns:
+        df_woth[col] = df_woth[col].apply(lambda x: round(x,2))
+    df_woth.columns = ['song','non-song','overall']
+
+    
+    # Woth locations only songs
+
+
+    df_woth2 = df_woth[df_woth['song']>0]
+    
+    print("\nAll way of the hero locations (by percentage):\nThese are NOT for hints- this is what is fully WOTH for the seed per the log.\nRead this as X% of seeds have this region as WOTH.")
+    print(df_piv.to_markdown())
+    print("\nWay of the hero with songs vs. non-songs:\nThese are not mutually exclusive, which is why most with song & non-song will add up to more than the pct. This means WOTH often refers to song, non-song, or both in the same seed.\nAnalyze this by looking at a data point's percent and saying 'At this region, this column (song/non-song/overall) has X% of being WOTH'")
+    print(df_woth.to_markdown())
+    print("\nWay of the hero with song differences (filtered from above table):")
+    print(df_woth2.to_markdown())
+    
+
+
+    # Woth items
+    df_source = create_pandas_table("SELECT * FROM public.woth_locations")
+    seeds_num = len(df_source['seed'].unique())
+    
+    df = df_source.copy()    
+    df['count'] = 1
+    df_piv = df.pivot_table(index=['seed','hint_item'],values=['count'],aggfunc=np.sum)
+    df_piv.reset_index("hint_item",inplace=True)
+    def apply_progressive(item, count):
+        if "Progressive" in item:
+            return "%s (%s)" % (item, count)
+        elif item in ['Claim Check','Eyeball Frog','Eyedrops','Prescription']:
+            return "Trade Item"
+        elif "Bottle" in item:
+            return "Bottle"
+        else:
+            return item
+        
+    df_piv['hint_item'] = np.vectorize(apply_progressive)(df_piv['hint_item'], df_piv['count'])
+    df_piv['count'] = 1
+    df_piv['pct'] = 100 / seeds_num
+    df_piv = df_piv.pivot_table(index=['hint_item'],values=['count','pct'],aggfunc=np.sum)
+
+    
+    print("Required WOTH items:\nThere are two major caveats here.\n1) This is showing strictly logically required items.\n2) Magic and Bow are shown as the non-Ganondorf required WOTH. Not entirely sure why or how this works in the log.")
+    print(df_piv.to_markdown())
+    
+    
+    # Woth locations
+    df_source = create_pandas_table("SELECT * FROM public.woth_locations")
+    seeds_num = len(df_source['seed'].unique())
+    
+    df = df_source.copy()    
+    df['count'] = 1
+    df_piv = df.pivot_table(index=['seed','location'],values=['count'],aggfunc=np.sum)
+    df_piv['count'] = 1
+    df_piv['pct'] = 100 / seeds_num
+    df_piv.reset_index("location",inplace=True)
+
+    df_piv2 = df_piv.pivot_table(index=['location'],values=['count','pct'],aggfunc=np.sum)
+    df_piv2 = df_piv2.sort_values(by='count',ascending=False)
+    print("\nRequired WOTH locations:\nGiven there's so many possible outcomes with ZOOTR, this chart is mostly cosmetic. Regions are better to analyze, except for some logically restricted checks.")
+    print(df_piv2.to_markdown())   
+    
+    
+    print("Subset for Skulltula House rewards:")
+    df_piv3 = df_piv2[df_piv2.index.str.contains("Skulltula Reward")]
+    print(df_piv3.to_markdown())   
+    
+    
+    
+    # Skulltula
+    df_source = create_pandas_table("SELECT * FROM public.playthrough")
+    df = df_source.copy()    
+    df = df[df['location'].str.contains(" GS")]
+    df['count'] = 1
+    df['pct'] = 100 / seeds_num
+    
+    df_piv = df.pivot_table(index=['location'],values = ['count','pct'],aggfunc=np.sum)
+    df_piv = df_piv.sort_values(by=['count'],ascending=False)
+    print("Skulltula locations 'required' per playthrough log\nThese are 'required' in that the playthrough log chose them. Of course there's usually flexibility, but it may be worthwhile to assess the most frequently chosen ones.\nNicely, all 100 are represented here (which somewhat surprised me).")
+    print(df_piv.to_markdown())   
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    # Sphere length
+    df_source = create_pandas_table("SELECT * FROM public.playthrough")
+    df_source['sphere'] = df_source['sphere'].astype(int)
+    seeds_num = len(df_source['seed'].unique())
+    
+    df_piv = df_source.pivot_table(index=['seed'],values = ['sphere'],aggfunc=np.max)
+    df_piv['count'] = 1
+    df_piv['pct'] = 100 / seeds_num
+    df_piv = df_piv.pivot_table(index=['sphere'],values=['pct','count'],aggfunc=np.sum)
+    df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
+    print("Sphere distribution:")
+    print(df_piv.to_markdown())
+    
+    ### Biggest playthrough sphere seed is HB9BMIWSKF but its not good bc Mido in logic
+    # G3YP766H2T A little better
+    
+    
+    
+
+    # Barren hints
+    df_source = create_pandas_table("SELECT * FROM public.gossip_stones_barren")
+    df = df_source.copy()
+    df['count'] = 1
+    df_piv = df.pivot_table(index=['location','seed'],values='count')    
+    df_piv['count'] = 1
+    df_piv['pct'] = 50 / seeds_num
+    df_piv = df_piv.pivot_table(index=['location'],values=['count','pct'],aggfunc=np.sum)
+    df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
+    
+    df_piv = df_piv.sort_values(by='count',ascending=False)
+    print("\nDistribution of barren hints (2 per seed)\nMost likely regions being given as barren hint are at the top of this list\nThis is different than barren regions in the seed, this is likelihood of any given barren hint being X region.\nThis is less important, this is just the 2 random barren regions you get as hints. More important is the first barren table, what has fully been decided for the seed. This table is much more likely to suffer from sample size inadequacy.")
+    print(df_piv.to_markdown())    
+    
+    # Woth hints
+    df_source = create_pandas_table("SELECT * FROM public.gossip_stones_woth")
+    df = df_source.copy()
+    df['count'] = 1
+    df_piv = df.pivot_table(index=['location','seed'],values='count')    
+    df_piv['count'] = 1
+    df_piv['pct'] = 25 / seeds_num
+    df_piv = df_piv.pivot_table(index=['location'],values=['count','pct'],aggfunc=np.sum)
+    df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
+   
+    df_piv = df_piv.sort_values(by='count',ascending=False)
+    print("\nDistribution of WOTH hints (4 per seed)\nSame notes as above.")
+    print(df_piv.to_markdown())    
+    
+    
+    
+    
+    
+    # Child Entrances 
+    df_source = create_pandas_table("SELECT * FROM public.entrances")
+    print("Distribution of Child entrances\nNothing entirely interesting, appears to be distributed based on number of unique entrances to all accessible areas.\nSome of these are grouped by region, others by individual location. A quirk of the log system")
+    df = df_source.copy()
+    df = df[df['original_spawn']=='Child']
+
+    df['count'] = 1
+    df['pct'] = 100 / seeds_num
+
+    df_piv = df.pivot_table(index=['original_spawn','new_spawn'],aggfunc=np.sum)
+    df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
+    df_piv = df_piv.sort_values(by=['count'],ascending=False)
+    print(df_piv.to_markdown())    
+
+    # Adult Entrances
+    print("Distribution of Adult entrances\nSee above notes.")
+    df = df_source.copy()
+    df = df[df['original_spawn']=='Adult']
+
+    df['count'] = 1
+    df['pct'] = 100 / seeds_num
+
+    df_piv = df.pivot_table(index=['original_spawn','new_spawn'],aggfunc=np.sum)
+    df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
+    df_piv = df_piv.sort_values(by=['count'],ascending=False)
+    print(df_piv.to_markdown())    
+    
+    
+    
+    
+    
+    # All dungeons
+    df_source = create_pandas_table("SELECT * FROM public.playthrough")
+    df = df_source.copy()
+    df['num_stones_medallions'] = df['location'].apply(lambda x: 1 if x in stones_medallions else 0)
+    df = df[df['num_stones_medallions']>0]
+    
+    df_piv = df.pivot_table(index=['seed'],values=['num_stones_medallions'],aggfunc=np.sum)
+    df_piv['count'] = 1
+    df_piv['pct'] = 100 / seeds_num
+
+    
+    df_piv = df_piv.pivot_table(index=['num_stones_medallions'],values=['num_stones_medallions','pct'],aggfunc=np.sum)
+    df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
+    # df_piv = df_piv.sort_values(by=['count'],ascending=False)
+    print("Number of stones & medallions required per playthrough (e.g., percentage of All Dungeons):\nNotably this is strictly logically required AD seeds, so things like Epona's or Saria's logic breaks would slightly push AD percentage down.\nInterestingly, the playthrough logs never had instances of 7 or 8, which means required items in non-AD seeds were never on boss hearts. This may be by design, but perhaps racers know more than I do here. I couldn't find anything relevant in the code base.")
+    print(df_piv.to_markdown())    
+    
+    
+    
+    
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    ### This is already achieved above for breakout of WOTH songs vs. non-songs
+    # Luckily the data being pulled two different ways yielded the same thing
+    
+    # Woth regions
+    # df = df_source.copy()    
+    # df['count'] = 1
+    # df_piv = df.pivot_table(index=['seed','location'],values=['count'],aggfunc=np.sum)
+    # df_piv['count'] = 1
+    # df_piv.reset_index("location",inplace=True)
+    # df_piv['region'] = df_piv['location'].apply(lambda x: region_lookup[x] if x in region_lookup.keys() else "NULL")
+    
+    # df_piv = df_piv.pivot_table(index=['seed','region'],values=['count'],aggfunc=np.sum)
+    # df_piv['count'] = 1
+    # df_piv['pct'] = 100 / seeds_num
+    
+    # df_piv2 = df_piv.pivot_table(index=['region'],values=['count','pct'],aggfunc=np.sum)
+    # print("\nRequired WOTH regions:\nThis is properly de-duplicated, so at least 1 WOTH location yields the region required for the seed")
+    # print(df_piv2.to_markdown())    
+
+    
+
+    
+
+'''
+
+>>>>>>>>>>>> Revisit logic of "Way of the hero with song differences"
+    Can non_songs and songs columns be calc'd as the pieces of all_woth column?
+
+
+Goal is to have this dataset set up such that future tournaments/events, we can run the exact same analysis and 
+    compare differences
+
+two overarching areas for exploration:
+    1 - simple data tables
+    2 - "are s4 seeds better or worse" - hard to compare to previous settings
+    
+    starting medallion/stone
+    
+    Line ~770 in World.py seems to show that songs will never count as "useless" (even Serenade, Prelude)
+        therefore any area with a song can never be barren 
+    
+    This is not supposed to serve as some epic data-oriented approach to changing how people look at seeds.
+    It's a simple collection of statistics true to the logs.
+    
+    While organizing this data I had two concepts at play:
+        #1 - Demonstrate data from spoiler logs cleanly
+        #2 - Can we answer the question of why season 4 seeds seem worse?
+    
+    #1 is achieved. #2 is not - it is a difficult question. First, in order to say something is better/worse than
+        something else, you'd have to have the baseline of the other thing (in this case, Season 3 or before). 
+        Not only that, the comparison of "what" is incredibly subjective. 
+        
+    I had a few theories or anti-theories on what would constitute "bad" seeds:
+        - Forced area revisits: The idea of having to specifically get an item in a first location, go to a second location,
+            then revisit the first location with the item retrieved in the second location. Although this is certainly can
+            lead to bad seeds, there often are ways to avoid this with logic breaking or even doing things in non-intended
+            order (compared to playthrough log)
+        - Sphere count: Spheres are interesting, but it's simply the code making any possible playthrough. Further
+            (as many experienced players are aware), very tedious logic chains can cause huge sphere counts. For example,
+            some Adult temples' key locations will be multiple spheres by themselves. Further, things like Mido's skip
+            trivializing WOTH implications for Forest Temple, etc. So sphere count is somewhat interesting but 
+            not at all the best indicator of "good" vs. "bad". I'd say they're generally correlated for slightly faster
+            seeds having low sphere counts, but inconclusive on the higher sphere counts 
+        - 
+            
+            
+    For those reasons and a few other data organization/science reasons, I decided not to pursue this deeply. In
+        my opinion, if you want to truly get into the data science methods of how and why seeds are "good" or "bad",
+        you'd have to first codify the time cost of every location. In other words, creating an extremely dynamic map
+        of how long generally required checks are between each other, including things like warping, save & quitting
+        (with random locations), Farore's Wind... entirely too much work for any reasonable human being. 
+        
+    
+    
+    Whenever looking at data points that seem close, remember that the randomizer
+        can create so many possibilites. So looking at likelihood of 1 random occurrence at 1 location or something
+        is not very important. But by looking at the macro level of what's happening, one can use intuition
+        to investigate deeper. Further, on some charts (such as Entrance starting locations), not very important
+        the ranking between choices, but general groups of high/low will be moderately reliable for outcomes. 
+    
+    
+    
+    Simply, the following regions present in WOTH locations are not present in Barren, which all have songs:
+        Kakariko Village
+        Sacred Forest Meadow
+        the Graveyard
+        Death Mountain Crater
+        Lon Lon Ranch
+        Desert Colossus
+        Hyrule Field
+        Ice Cavern
+        Temple of Time
+
+    The take-away is "A barren hint is just not going to touch the topic of songs", not much else
+    
+    
+    
+    Way of the hero:
+        88.47% of seeds have Kakariko as a WOTH area. 
+        
+        
+    
+    WOTH Hint: walk through DMC example
+        Look at DMC and look at difference of song vs. non song
+            27.56% of WOTHs are non-song for DMC
+            46.63% of WOTHs are songs for DMC
+            
+        Meaning that DMC hints are much more likely to be songs 
+        (Side note, this table is not additive because of the changing weight of each location when separating the data)
+            
+        Then look at the WOTH Hint table (4.32%) - if you get happen to get a DMC hint, 4.32% chance,
+            then more than likely (46% vs 27%) it's pointing to a song 
+    
+    
+        So the take-away is, look at the "Way of the hero with song differences" and check out where the dropoff is
+            Look at SFM! Way, way, way more likely WOTH for song than item 
+            Then look at Ice Cavern - you might think with less checks that it would be song heavy WOTH, but probably because of how blocked off it is from other requirements, 
+                perhaps its power as a song location for WOTH is diminished compared to items
+                
+                
+                
+                
+    Required WOTH items:
+        Bomb Bag is pretty low. It's interesting, most people would think higher, because it gives access to so many checks
+        But it's a bit of a fallacy to think so, it's just having Bomb Bag makes checking areas way more efficient
+        
+            
+'''
