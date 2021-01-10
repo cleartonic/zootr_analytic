@@ -264,11 +264,12 @@ def b9():
     # print("Distribution of Child entrances\nNothing entirely interesting, appears to be distributed based on number of unique entrances to all accessible areas.\nSome of these are grouped by region, others by individual location. A quirk of the log system")
     df = df_source.copy()
     df = df[df['original_spawn']=='Child']
+    df = df.iloc[:,1:]
 
     df['count'] = 1
     df['pct'] = 100 / seeds_num
 
-    df_piv = df.pivot_table(index=['original_spawn','new_spawn'],aggfunc=np.sum)
+    df_piv = df.pivot_table(index=['new_spawn'],aggfunc=np.sum)
     df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
     df_piv = df_piv.sort_values(by=['count'],ascending=False)
     display(HTML(df_piv.to_html()))    
@@ -278,12 +279,13 @@ def b10():
     df_source = create_pandas_table("SELECT * FROM public.entrances")
     # print("Distribution of Adult entrances\nSee above notes.")
     df = df_source.copy()
+    df = df.iloc[:,1:]
     df = df[df['original_spawn']=='Adult']
 
     df['count'] = 1
     df['pct'] = 100 / seeds_num
 
-    df_piv = df.pivot_table(index=['original_spawn','new_spawn'],aggfunc=np.sum)
+    df_piv = df.pivot_table(index=['new_spawn'],aggfunc=np.sum)
     df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
     df_piv = df_piv.sort_values(by=['count'],ascending=False)
     display(HTML(df_piv.to_html()))    
