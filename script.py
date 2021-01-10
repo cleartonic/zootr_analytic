@@ -279,8 +279,8 @@ def b10():
     df_source = create_pandas_table("SELECT * FROM public.entrances")
     # print("Distribution of Adult entrances\nSee above notes.")
     df = df_source.copy()
-    df = df.iloc[:,1:]
     df = df[df['original_spawn']=='Adult']
+    df = df.iloc[:,1:]
 
     df['count'] = 1
     df['pct'] = 100 / seeds_num
