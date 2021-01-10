@@ -3,7 +3,8 @@ import yaml
 with open('config.yaml') as f:
     config = yaml.safe_load(f)
     
-from IPython.display import display
+from IPython.display import display, HTML
+
 
 
 
@@ -27,6 +28,8 @@ songs = ['Song from Impa',
 
 stones_medallions = ['Links Pocket', 'Queen Gohma', 'King Dodongo', 'Barinade', 'Phantom Ganon', 'Volvagia', 'Morpha', 'Bongo Bongo', 'Twinrova']
 
+
+
 def create_pandas_table(sql_query):
     # Create a new cursor
     conn = psycopg2.connect(
@@ -43,6 +46,10 @@ def create_pandas_table(sql_query):
     conn.close()
     return table
 
+df_source = create_pandas_table("SELECT * FROM public.seeds")
+seeds_num = len(df_source['seed'].unique())
+
+
 def b1():
     df_source = create_pandas_table("SELECT * FROM public.barren_regions")
     seeds_num = len(df_source['seed'].unique())
@@ -52,9 +59,9 @@ def b1():
     df['pct'] = 100 / seeds_num
     df_piv = df.pivot_table(index=['location'],values=['count','pct'],aggfunc=np.sum)
     df_piv = df_piv.sort_values(by='count',ascending=False)
-    print("\nBarren regions:\nThis is NOT the gossip hint system, this is given per the spoiler. The hints are picked from barren regions from this list.\nRead 'count' column as number of seeds that have X region as a barren region.\nNotice how songs areas are never barren. Same goes for barren hints. It appears the randomization engine avoids dealing with this song problem entirely by avoiding hints at those regions altogether.")
-    print(df_piv.to_markdown())
-
+    # print("\nBarren regions:\nThis is NOT the gossip hint system, this is given per the spoiler. The hints are picked from barren regions from this list.\nRead 'count' column as number of seeds that have X region as a barren region.\nNotice how songs areas are never barren. Same goes for barren hints. It appears the randomization engine avoids dealing with this song problem entirely by avoiding hints at those regions altogether.")
+    # display(HTML(df_piv.to_html()))
+    display(HTML(df_piv.to_html()))
 
 
 
@@ -81,9 +88,15 @@ def b2():
     df_piv = df_piv.sort_values(by='overall',ascending=False)
     for col in df_piv.columns:
         df_piv[col] = df_piv[col].apply(lambda x: round(x,2))
+    # print("\nAll way of the hero locations (by percentage):\nThese are NOT for hints- this is what is fully WOTH for the seed per the log.\nRead this as X% of seeds have this region as WOTH.")
+    display(HTML(df_piv.to_html()))
+        
+        
     
-    # Woth locations without songs
 
+def b2_1():
+        # Woth locations without songs
+    df_source = create_pandas_table("SELECT * FROM public.woth_locations")
     df = df_source.copy()
     def apply_song(location):
         if location in songs:
@@ -107,21 +120,19 @@ def b2():
     for col in df_woth.columns:
         df_woth[col] = df_woth[col].apply(lambda x: round(x,2))
     df_woth.columns = ['song','non-song','overall']
-
-    
+   
     # Woth locations only songs
-
 
     df_woth2 = df_woth[df_woth['song']>0]
     
-    print("\nAll way of the hero locations (by percentage):\nThese are NOT for hints- this is what is fully WOTH for the seed per the log.\nRead this as X% of seeds have this region as WOTH.")
-    print(df_piv.to_markdown())
-    print("\nWay of the hero with songs vs. non-songs:\nThese are not mutually exclusive, which is why most with song & non-song will add up to more than the pct. This means WOTH often refers to song, non-song, or both in the same seed.\nAnalyze this by looking at a data point's percent and saying 'At this region, this column (song/non-song/overall) has X% of being WOTH'")
-    print(df_woth.to_markdown())
-    print("\nWay of the hero with song differences (filtered from above table):")
-    print(df_woth2.to_markdown())
-    
+    # print("\nWay of the hero with songs vs. non-songs:\nThese are not mutually exclusive, which is why most with song & non-song will add up to more than the pct. This means WOTH often refers to song, non-song, or both in the same seed.\nAnalyze this by looking at a data point's percent and saying 'At this region, this column (song/non-song/overall) has X% of being WOTH'")
+    display(HTML(df_woth.to_html()))
+    print('\nFiltered below for song areas only:\n')
 
+    # print("\nWay of the hero with song differences (filtered from above table):")
+    display(HTML(df_woth2.to_html()))
+    
+def b3():
 
     # Woth items
     df_source = create_pandas_table("SELECT * FROM public.woth_locations")
@@ -147,10 +158,10 @@ def b2():
     df_piv = df_piv.pivot_table(index=['hint_item'],values=['count','pct'],aggfunc=np.sum)
 
     
-    print("Required WOTH items:\nThere are two major caveats here.\n1) This is showing strictly logically required items.\n2) Magic and Bow are shown as the non-Ganondorf required WOTH. Not entirely sure why or how this works in the log.")
-    print(df_piv.to_markdown())
+    # print("Required WOTH items:\nThere are two major caveats here.\n1) This is showing strictly logically required items.\n2) Magic and Bow are shown as the non-Ganondorf required WOTH. Not entirely sure why or how this works in the log.")
+    display(HTML(df_piv.to_html()))
     
-    
+def b4():
     # Woth locations
     df_source = create_pandas_table("SELECT * FROM public.woth_locations")
     seeds_num = len(df_source['seed'].unique())
@@ -164,15 +175,16 @@ def b2():
 
     df_piv2 = df_piv.pivot_table(index=['location'],values=['count','pct'],aggfunc=np.sum)
     df_piv2 = df_piv2.sort_values(by='count',ascending=False)
-    print("\nRequired WOTH locations:\nGiven there's so many possible outcomes with ZOOTR, this chart is mostly cosmetic. Regions are better to analyze, except for some logically restricted checks.")
-    print(df_piv2.to_markdown())   
+    # print("\nRequired WOTH locations:\nGiven there's so many possible outcomes with ZOOTR, this chart is mostly cosmetic. Regions are better to analyze, except for some logically restricted checks.")
+    display(HTML(df_piv2.to_html()))   
     
     
-    print("Subset for Skulltula House rewards:")
-    df_piv3 = df_piv2[df_piv2.index.str.contains("Skulltula Reward")]
-    print(df_piv3.to_markdown())   
+    print("\nSubset for Skulltula House rewards:")
+    df_piv2 = df_piv2[df_piv2.index.str.contains("Skulltula Reward")]
+    display(HTML(df_piv2.to_html()))   
     
-    
+
+def b5():    
     
     # Skulltula
     df_source = create_pandas_table("SELECT * FROM public.playthrough")
@@ -183,15 +195,15 @@ def b2():
     
     df_piv = df.pivot_table(index=['location'],values = ['count','pct'],aggfunc=np.sum)
     df_piv = df_piv.sort_values(by=['count'],ascending=False)
-    print("Skulltula locations 'required' per playthrough log\nThese are 'required' in that the playthrough log chose them. Of course there's usually flexibility, but it may be worthwhile to assess the most frequently chosen ones.\nNicely, all 100 are represented here (which somewhat surprised me).")
-    print(df_piv.to_markdown())   
+    # print("Skulltula locations 'required' per playthrough log\nThese are 'required' in that the playthrough log chose them. Of course there's usually flexibility, but it may be worthwhile to assess the most frequently chosen ones.\nNicely, all 100 are represented here (which somewhat surprised me).")
+    display(HTML(df_piv.to_html()))   
     
     
     
     
     
     
-    
+def b6():    
     
     
     
@@ -205,14 +217,14 @@ def b2():
     df_piv['pct'] = 100 / seeds_num
     df_piv = df_piv.pivot_table(index=['sphere'],values=['pct','count'],aggfunc=np.sum)
     df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
-    print("Sphere distribution:")
-    print(df_piv.to_markdown())
+    # print("Sphere distribution:")
+    display(HTML(df_piv.to_html()))
     
     ### Biggest playthrough sphere seed is HB9BMIWSKF but its not good bc Mido in logic
     # G3YP766H2T A little better
     
     
-    
+def b7():    
 
     # Barren hints
     df_source = create_pandas_table("SELECT * FROM public.gossip_stones_barren")
@@ -225,9 +237,10 @@ def b2():
     df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
     
     df_piv = df_piv.sort_values(by='count',ascending=False)
-    print("\nDistribution of barren hints (2 per seed)\nMost likely regions being given as barren hint are at the top of this list\nThis is different than barren regions in the seed, this is likelihood of any given barren hint being X region.\nThis is less important, this is just the 2 random barren regions you get as hints. More important is the first barren table, what has fully been decided for the seed. This table is much more likely to suffer from sample size inadequacy.")
-    print(df_piv.to_markdown())    
-    
+    # print("\nDistribution of barren hints (2 per seed)\nMost likely regions being given as barren hint are at the top of this list\nThis is different than barren regions in the seed, this is likelihood of any given barren hint being X region.\nThis is less important, this is just the 2 random barren regions you get as hints. More important is the first barren table, what has fully been decided for the seed. This table is much more likely to suffer from sample size inadequacy.")
+    display(HTML(df_piv.to_html()))    
+
+def b8():
     # Woth hints
     df_source = create_pandas_table("SELECT * FROM public.gossip_stones_woth")
     df = df_source.copy()
@@ -239,16 +252,16 @@ def b2():
     df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
    
     df_piv = df_piv.sort_values(by='count',ascending=False)
-    print("\nDistribution of WOTH hints (4 per seed)\nSame notes as above.")
-    print(df_piv.to_markdown())    
+    # print("\nDistribution of WOTH hints (4 per seed)\nSame notes as above.")
+    display(HTML(df_piv.to_html()))    
     
     
     
     
-    
+def b9():    
     # Child Entrances 
     df_source = create_pandas_table("SELECT * FROM public.entrances")
-    print("Distribution of Child entrances\nNothing entirely interesting, appears to be distributed based on number of unique entrances to all accessible areas.\nSome of these are grouped by region, others by individual location. A quirk of the log system")
+    # print("Distribution of Child entrances\nNothing entirely interesting, appears to be distributed based on number of unique entrances to all accessible areas.\nSome of these are grouped by region, others by individual location. A quirk of the log system")
     df = df_source.copy()
     df = df[df['original_spawn']=='Child']
 
@@ -258,10 +271,12 @@ def b2():
     df_piv = df.pivot_table(index=['original_spawn','new_spawn'],aggfunc=np.sum)
     df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
     df_piv = df_piv.sort_values(by=['count'],ascending=False)
-    print(df_piv.to_markdown())    
+    display(HTML(df_piv.to_html()))    
 
+def b10():
     # Adult Entrances
-    print("Distribution of Adult entrances\nSee above notes.")
+    df_source = create_pandas_table("SELECT * FROM public.entrances")
+    # print("Distribution of Adult entrances\nSee above notes.")
     df = df_source.copy()
     df = df[df['original_spawn']=='Adult']
 
@@ -271,12 +286,12 @@ def b2():
     df_piv = df.pivot_table(index=['original_spawn','new_spawn'],aggfunc=np.sum)
     df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
     df_piv = df_piv.sort_values(by=['count'],ascending=False)
-    print(df_piv.to_markdown())    
+    display(HTML(df_piv.to_html()))    
     
     
     
     
-    
+def b11():    
     # All dungeons
     df_source = create_pandas_table("SELECT * FROM public.playthrough")
     df = df_source.copy()
@@ -291,8 +306,8 @@ def b2():
     df_piv = df_piv.pivot_table(index=['num_stones_medallions'],values=['num_stones_medallions','pct'],aggfunc=np.sum)
     df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
     # df_piv = df_piv.sort_values(by=['count'],ascending=False)
-    print("Number of stones & medallions required per playthrough (e.g., percentage of All Dungeons):\nNotably this is strictly logically required AD seeds, so things like Epona's or Saria's logic breaks would slightly push AD percentage down.\nInterestingly, the playthrough logs never had instances of 7 or 8, which means required items in non-AD seeds were never on boss hearts. This may be by design, but perhaps racers know more than I do here. I couldn't find anything relevant in the code base.")
-    print(df_piv.to_markdown())    
+    # print("Number of stones & medallions required per playthrough (e.g., percentage of All Dungeons):\nNotably this is strictly logically required AD seeds, so things like Epona's or Saria's logic breaks would slightly push AD percentage down.\nInterestingly, the playthrough logs never had instances of 7 or 8, which means required items in non-AD seeds were never on boss hearts. This may be by design, but perhaps racers know more than I do here. I couldn't find anything relevant in the code base.")
+    display(HTML(df_piv.to_html()))    
     
     
     
@@ -333,7 +348,7 @@ def b2():
     
     # df_piv2 = df_piv.pivot_table(index=['region'],values=['count','pct'],aggfunc=np.sum)
     # print("\nRequired WOTH regions:\nThis is properly de-duplicated, so at least 1 WOTH location yields the region required for the seed")
-    # print(df_piv2.to_markdown())    
+    # display(HTML(df_piv2.to_html()))    
 
     
 
