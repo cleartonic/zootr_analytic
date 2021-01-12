@@ -366,6 +366,130 @@ def b11_2():
     '''    
     
     
+def b12():   
+    
+    # first let's show density per region
+    df_source = create_pandas_table("SELECT * FROM public.locations where seed = 'ZZVTXFLCR7'")
+    df = df_source.copy()    
+    df['count'] = 1
+    df['region'] = df['location'].apply(lambda x: region_lookup[x] if x in region_lookup.keys() else "NULL")
+    df = df[~df['location'].isin(stones_medallions)]
+    df = df[~df['location'].isin(["Link's Pocket"])]
+    
+    
+    
+    df_piv = df.pivot_table(index=['region'],aggfunc=np.sum).sort_values(by='count',ascending=False)
+    keys = df[df['item'].str.contains("Small Key")].pivot_table(index=['region'],aggfunc=np.sum)
+    df_piv = df_piv.join(keys,lsuffix='l')
+    df_piv.columns = ['checks','keys']
+    df_piv.fillna(0,inplace=True)
+    df_piv['keys'] = df_piv['keys'].astype(int)
+    df_piv['effective_checks'] = df_piv['checks'] - df_piv['keys']
+    df_piv = df_piv.sort_values(by='effective_checks',ascending=False)
+    
+    display(HTML(df_piv.to_html()))    
+
+def b13():   
+    
+    # 
+    df_source = create_pandas_table("SELECT * FROM public.locations")
+    df = df_source.copy()
+
+    df_source2 = create_pandas_table("SELECT * FROM public.woth_locations")
+    df2 = df_source2.copy()
+
+    # Get woth locations
+    df3 = df.join(df2.set_index(["seed","location"]),on=['seed','location'])
+    df3['woth_item'] = df3['hint_item'].apply(lambda x: "non woth" if x != x else "woth")
+
+    # woth_items = list(create_pandas_table("SELECT distinct(hint_item) FROM public.woth_locations")['hint_item'].unique())
+
+    # df['woth_item'] = df['item'].apply(lambda x: "potential woth" if x in woth_items else "junk")
+    df = df3.copy()
+    df['region'] = df['location'].apply(lambda x: region_lookup[x] if x in region_lookup.keys() else "NULL")
+    df = df[df['region']!="Link's Pocket"]
+    df['count'] = 1
+    
+    df_piv = df.pivot_table(index=['seed','region','woth_item'],values=['count'],aggfunc=np.sum)
+    
+    df_piv2 = df_piv.pivot_table(index=['region','woth_item'],values=['count'],aggfunc=np.sum).reset_index()
+    df_piv2['pct'] = 0
+    
+    def apply_woth_split(loc, count):
+        x = df_piv2[df_piv2['region']==loc]['count'].sum()
+        y = round(((count/x) * 100),2)
+        return y
+    
+    df_piv2['pct'] = np.vectorize(apply_woth_split)(df_piv2['region'],df_piv2['count'])
+    df_piv2 = df_piv2.pivot_table(index=['region','woth_item'],values=['count','pct'],aggfunc=np.sum)
+    
+    display(HTML(df_piv2.to_html()))    
+
+
+
+def b14_1():   
+    
+    # Woth locations
+    df_source = create_pandas_table("SELECT * FROM public.woth_locations")
+    seeds_num = len(df_source['seed'].unique())
+    
+    df = df_source.copy()    
+    df['region'] = df['location'].apply(lambda x: region_lookup[x] if x in region_lookup.keys() else "NULL")
+    df = df[df['region']=='Deku Tree']
+    df['count'] = 1
+
+    df_piv = df.pivot_table(index=['seed','location'],values=['count'],aggfunc=np.sum)
+    df_piv['count'] = 1
+    df_piv['pct'] = 100 / seeds_num
+    df_piv.reset_index("location",inplace=True)
+
+    df_piv2 = df_piv.pivot_table(index=['location'],values=['count','pct'],aggfunc=np.sum)
+    df_piv2 = df_piv2.sort_values(by='count',ascending=False)
+    # print("\nRequired WOTH locations:\nGiven there's so many possible outcomes with ZOOTR, this chart is mostly cosmetic. Regions are better to analyze, except for some logically restricted checks.")
+    display(HTML(df_piv2.to_html()))   
+
+
+def b14_2():   
+    
+    # Woth locations
+    df_source = create_pandas_table("SELECT * FROM public.woth_locations")
+    seeds_num = len(df_source['seed'].unique())
+    
+    df = df_source.copy()    
+    df['region'] = df['location'].apply(lambda x: region_lookup[x] if x in region_lookup.keys() else "NULL")
+    df = df[df['region']=='Water Temple']
+    df['count'] = 1
+
+    df_piv = df.pivot_table(index=['seed','location'],values=['count'],aggfunc=np.sum)
+    df_piv['count'] = 1
+    df_piv['pct'] = 100 / seeds_num
+    df_piv.reset_index("location",inplace=True)
+
+    df_piv2 = df_piv.pivot_table(index=['location'],values=['count','pct'],aggfunc=np.sum)
+    df_piv2 = df_piv2.sort_values(by='count',ascending=False)
+    # print("\nRequired WOTH locations:\nGiven there's so many possible outcomes with ZOOTR, this chart is mostly cosmetic. Regions are better to analyze, except for some logically restricted checks.")
+    display(HTML(df_piv2.to_html()))   
+    
+def b14_3():   
+    
+    # Woth locations
+    df_source = create_pandas_table("SELECT * FROM public.woth_locations")
+    seeds_num = len(df_source['seed'].unique())
+    
+    df = df_source.copy()    
+    df['region'] = df['location'].apply(lambda x: region_lookup[x] if x in region_lookup.keys() else "NULL")
+    df = df[df['region']=='Shadow Temple']
+    df['count'] = 1
+
+    df_piv = df.pivot_table(index=['seed','location'],values=['count'],aggfunc=np.sum)
+    df_piv['count'] = 1
+    df_piv['pct'] = 100 / seeds_num
+    df_piv.reset_index("location",inplace=True)
+
+    df_piv2 = df_piv.pivot_table(index=['location'],values=['count','pct'],aggfunc=np.sum)
+    df_piv2 = df_piv2.sort_values(by='count',ascending=False)
+    # print("\nRequired WOTH locations:\nGiven there's so many possible outcomes with ZOOTR, this chart is mostly cosmetic. Regions are better to analyze, except for some logically restricted checks.")
+    display(HTML(df_piv2.to_html()))   
 
 
 
@@ -379,8 +503,7 @@ def b11_2():
 
 
 
-
-
+# def unused():
 
 
     ### This is already achieved above for breakout of WOTH songs vs. non-songs
