@@ -291,29 +291,79 @@ def b10():
     display(HTML(df_piv.to_html()))    
     
     
-    
-    
 def b11():    
     # All dungeons
     df_source = create_pandas_table("SELECT * FROM public.playthrough")
     df = df_source.copy()
-    df['num_stones_medallions'] = df['location'].apply(lambda x: 1 if x in stones_medallions else 0)
-    df = df[df['num_stones_medallions']>0]
+    df['dungeons_required'] = df['location'].apply(lambda x: 1 if x in stones_medallions else 0)
+    df = df[df['dungeons_required']>0]
     
-    df_piv = df.pivot_table(index=['seed'],values=['num_stones_medallions'],aggfunc=np.sum)
+    df_piv = df.pivot_table(index=['seed'],values=['dungeons_required'],aggfunc=np.sum)
     df_piv['count'] = 1
     df_piv['pct'] = 100 / seeds_num
 
     
-    df_piv = df_piv.pivot_table(index=['num_stones_medallions'],values=['num_stones_medallions','pct'],aggfunc=np.sum)
-    df_piv['pct'] = df_piv['pct'].apply(lambda x: round(x,2))
+    df_piv2 = df_piv.pivot_table(index=['dungeons_required'],values=['dungeons_required','pct'],aggfunc=np.sum)
+    df_piv2['pct'] = df_piv2['pct'].apply(lambda x: round(x,2))
     # df_piv = df_piv.sort_values(by=['count'],ascending=False)
     # print("Number of stones & medallions required per playthrough (e.g., percentage of All Dungeons):\nNotably this is strictly logically required AD seeds, so things like Epona's or Saria's logic breaks would slightly push AD percentage down.\nInterestingly, the playthrough logs never had instances of 7 or 8, which means required items in non-AD seeds were never on boss hearts. This may be by design, but perhaps racers know more than I do here. I couldn't find anything relevant in the code base.")
-    display(HTML(df_piv.to_html()))    
+    display(HTML(df_piv2.to_html()))    
     
     
     
     
+def b11_2():    
+    # All dungeons - with boss hearts
+    
+    # First check all boss hearts
+    
+    boss_hearts = {'Fire Temple Volvagia Heart':'Volvagia', 
+                   'Dodongos Cavern King Dodongo Heart':'King Dodongo',
+                   'Spirit Temple Twinrova Heart':"Twinrova", 
+                   'Forest Temple Phantom Ganon Heart':"Phantom Ganon",
+                   'Jabu Jabus Belly Barinade Heart':"Barinade", 
+                   'Water Temple Morpha Heart':"Morpha",
+                   'Deku Tree Queen Gohma Heart':"Queen Gohma", 
+                   'Shadow Temple Bongo Bongo Heart':"Bongo Bongo"}
+       
+        
+    def switch_location(loc):
+        if loc in boss_hearts.keys():
+            return boss_hearts[loc]
+        else:
+            return loc
+            
+    
+    df_source = create_pandas_table("SELECT * FROM public.playthrough")
+    df = df_source.copy()
+    df = df[['location','seed']]
+    
+    # This step changes all boss hearts to "effectively" be boss kills, then treats them as required for the seed playthrough
+    df['location'] = df['location'].apply(switch_location)
+    df = df.drop_duplicates(subset=['location','seed'])
+    
+    
+    df['dungeons_required'] = df['location'].apply(lambda x: 1 if x in stones_medallions else 0)
+       
+    df_piv = df.pivot_table(index=['seed'],values=['dungeons_required'],aggfunc=np.sum)
+    df_piv['count'] = 1
+    df_piv['pct'] = 100 / seeds_num
+
+    
+    df_piv2 = df_piv.pivot_table(index=['dungeons_required'],values=['dungeons_required','pct'],aggfunc=np.sum)
+    df_piv2['pct'] = df_piv2['pct'].apply(lambda x: round(x,2))
+    # print("Number of stones & medallions required per playthrough (e.g., percentage of All Dungeons):\nNotably this is strictly logically required AD seeds, so things like Epona's or Saria's logic breaks would slightly push AD percentage down.\nInterestingly, the playthrough logs never had instances of 7 or 8, which means required items in non-AD seeds were never on boss hearts. This may be by design, but perhaps racers know more than I do here. I couldn't find anything relevant in the code base.")
+    display(HTML(df_piv2.to_html()))    
+    
+    
+    '''
+    Three seeds had 6 dungeons required to beat the seed, but then all 3 other BOSS HEARTS had WOTH items:
+        ['BGKHID9PTN', 'I8WQ0S1RUA', 'V6SQQGESQ3']
+        Lmao
+        
+        The first one is REAL good
+        
+    '''    
     
     
 
