@@ -26,9 +26,16 @@ songs = ['Song from Impa',
  'Sheik in Kakariko',
  'Sheik at Temple']
 
-stones_medallions = ['Links Pocket', 'Queen Gohma', 'King Dodongo', 'Barinade', 'Phantom Ganon', 'Volvagia', 'Morpha', 'Bongo Bongo', 'Twinrova']
+stones_medallions = ['Queen Gohma', 'King Dodongo', 'Barinade', 'Phantom Ganon', 'Volvagia', 'Morpha', 'Bongo Bongo', 'Twinrova']
 
-
+boss_hearts = {'Fire Temple Volvagia Heart':'Volvagia', 
+               'Dodongos Cavern King Dodongo Heart':'King Dodongo',
+               'Spirit Temple Twinrova Heart':"Twinrova", 
+               'Forest Temple Phantom Ganon Heart':"Phantom Ganon",
+               'Jabu Jabus Belly Barinade Heart':"Barinade", 
+               'Water Temple Morpha Heart':"Morpha",
+               'Deku Tree Queen Gohma Heart':"Queen Gohma", 
+               'Shadow Temple Bongo Bongo Heart':"Bongo Bongo"}
 
 def create_pandas_table(sql_query):
     # Create a new cursor
@@ -48,6 +55,9 @@ def create_pandas_table(sql_query):
 
 df_source = create_pandas_table("SELECT * FROM public.seeds")
 seeds_num = len(df_source['seed'].unique())
+
+def num_seeds(): 
+    print("Number of seeds (sample size): %s " % seeds_num)
 
 
 def b1():
@@ -223,6 +233,28 @@ def b6():
     ### Biggest playthrough sphere seed is HB9BMIWSKF but its not good bc Mido in logic
     # G3YP766H2T A little better
     
+def b6_1():    
+    
+    
+    
+    # Sphere index length
+    df_source = create_pandas_table("SELECT * FROM public.playthrough")
+    df_source['index'] = df_source['index'].astype(int)
+    seeds_num = len(df_source['seed'].unique())
+    
+    df_piv = df_source.pivot_table(index=['seed'],values = ['index'],aggfunc=np.max)
+    df_piv['grouping'] = df_piv['index'].apply(lambda x: "%s0 - %s9" % (round(x/10),round(x/10)))
+    df_piv['count'] = 1
+    df_piv['pct'] = 100 / seeds_num
+    df_piv2 = df_piv.pivot_table(index=['grouping'],values=['pct','count'],aggfunc=np.sum)
+    df_piv2['pct'] = df_piv2['pct'].apply(lambda x: round(x,2))
+    df_piv2 = df_piv2.iloc[5:].append(df_piv2.iloc[0:5])
+    # print("Sphere distribution:")
+    display(HTML(df_piv2.to_html()))
+    
+    ### Biggest playthrough sphere seed is HB9BMIWSKF but its not good bc Mido in logic
+    # G3YP766H2T A little better
+    
     
 def b7():    
 
@@ -305,8 +337,6 @@ def b11():
     
     df_piv2 = df_piv.pivot_table(index=['dungeons_required'],values=['dungeons_required','pct'],aggfunc=np.sum)
     df_piv2['pct'] = df_piv2['pct'].apply(lambda x: round(x,2))
-    # df_piv = df_piv.sort_values(by=['count'],ascending=False)
-    # print("Number of stones & medallions required per playthrough (e.g., percentage of All Dungeons):\nNotably this is strictly logically required AD seeds, so things like Epona's or Saria's logic breaks would slightly push AD percentage down.\nInterestingly, the playthrough logs never had instances of 7 or 8, which means required items in non-AD seeds were never on boss hearts. This may be by design, but perhaps racers know more than I do here. I couldn't find anything relevant in the code base.")
     display(HTML(df_piv2.to_html()))    
     
     
@@ -316,16 +346,6 @@ def b11_2():
     # All dungeons - with boss hearts
     
     # First check all boss hearts
-    
-    boss_hearts = {'Fire Temple Volvagia Heart':'Volvagia', 
-                   'Dodongos Cavern King Dodongo Heart':'King Dodongo',
-                   'Spirit Temple Twinrova Heart':"Twinrova", 
-                   'Forest Temple Phantom Ganon Heart':"Phantom Ganon",
-                   'Jabu Jabus Belly Barinade Heart':"Barinade", 
-                   'Water Temple Morpha Heart':"Morpha",
-                   'Deku Tree Queen Gohma Heart':"Queen Gohma", 
-                   'Shadow Temple Bongo Bongo Heart':"Bongo Bongo"}
-       
         
     def switch_location(loc):
         if loc in boss_hearts.keys():
@@ -333,27 +353,94 @@ def b11_2():
         else:
             return loc
             
+        
+    ### EXAMPLE WITH BARINADE  
+    #   ZZUJJNAMEV
+    sample_seed = 'ZZUJJNAMEV'
     
     df_source = create_pandas_table("SELECT * FROM public.playthrough")
     df = df_source.copy()
     df = df[['location','seed']]
-    
-    # This step changes all boss hearts to "effectively" be boss kills, then treats them as required for the seed playthrough
-    df['location'] = df['location'].apply(switch_location)
-    df = df.drop_duplicates(subset=['location','seed'])
-    
-    
     df['dungeons_required'] = df['location'].apply(lambda x: 1 if x in stones_medallions else 0)
-       
-    df_piv = df.pivot_table(index=['seed'],values=['dungeons_required'],aggfunc=np.sum)
-    df_piv['count'] = 1
-    df_piv['pct'] = 100 / seeds_num
+    df['location'] = df['location'].apply(switch_location)
+    df = df.pivot_table(index=['seed','location'],values=['dungeons_required'],aggfunc=np.sum)    
+
+    df2 = df_source.copy()
+    df2 = df2[['location','reward','seed']]
+    df2['hearts_required'] = df2['location'].apply(lambda x: 1 if x in boss_hearts.keys() else 0)
+    
+    def apply_key_rule(x,y):
+        if "key" in x.lower():
+            return 0
+        else:
+            return y
+    df2['hearts_required'] = np.vectorize(apply_key_rule)(df2['reward'],df2['hearts_required'])
+    
+    df2['location'] = df2['location'].apply(switch_location)
+    df2 = df2.pivot_table(index=['seed','location'],values=['hearts_required'],aggfunc=np.sum)    
+
+    df3 = df.join(df2)
+    def apply_int(x):
+        try:
+            return int(x)
+        except:
+            return 0
+
+    df3['hearts_required'] = df3['hearts_required'].apply(apply_int)
+    
+    def apply_designation(x,y):
+        if x == 0 and y == 0:
+            return "none"
+        elif x == 0 and y == 1:
+            return "stone_heart"
+        elif x == 1 and y == 0:
+            return "blue_warp_only"
+        elif x == 1 and y == 1:
+            return "heart_and_blue_warp"
+        else:
+            breakpoint()
+    
+    def apply_dungeon_score(x,y):
+        if x == 1 or y == 1:
+            return 1
+        else:
+            return 0
+    
+    df3['status'] = np.vectorize(apply_designation)(df3['dungeons_required'],df3['hearts_required'])
+    df3 = df3[df3['status']!="none"]
+    df3['count'] = 1
+    df3['dungeon_score'] = np.vectorize(apply_dungeon_score)(df3['dungeons_required'],df3['hearts_required'])
 
     
-    df_piv2 = df_piv.pivot_table(index=['dungeons_required'],values=['dungeons_required','pct'],aggfunc=np.sum)
+    # simple all dungeons table
+    df_piv = df3.pivot_table(index=['seed'],values=['dungeon_score'],aggfunc=np.sum)
+    df_piv['count'] = 1
+    df_piv['pct'] = 100 / seeds_num
+    
+    df_piv2 = df_piv.pivot_table(index=['dungeon_score'],values=['count','pct'],aggfunc=np.sum)
     df_piv2['pct'] = df_piv2['pct'].apply(lambda x: round(x,2))
-    # print("Number of stones & medallions required per playthrough (e.g., percentage of All Dungeons):\nNotably this is strictly logically required AD seeds, so things like Epona's or Saria's logic breaks would slightly push AD percentage down.\nInterestingly, the playthrough logs never had instances of 7 or 8, which means required items in non-AD seeds were never on boss hearts. This may be by design, but perhaps racers know more than I do here. I couldn't find anything relevant in the code base.")
+    
     display(HTML(df_piv2.to_html()))    
+    
+    print("\nBreakout by stone hearts\n")
+
+    
+    ## breakout of dungeons & hearts
+    df_piv3 = df3.pivot_table(index=['seed'],columns=['status'],values=['count'],aggfunc=np.sum)
+    df_piv3.columns = ['blue_warp_only','heart_and_blue_warp','stone_heart']
+    for c in ['blue_warp_only','heart_and_blue_warp','stone_heart']:
+        df_piv3[c] = df_piv3[c].apply(apply_int)
+    df_piv3 = df_piv3.fillna(0)
+    df_piv3['blue_warp'] = df_piv3['blue_warp_only'] + df_piv3['heart_and_blue_warp']
+    df_piv3 = df_piv3.join(df_piv[['dungeon_score']])
+    # df_piv3.columns = ['status_count']
+    df_piv3['count'] = 1
+    df_piv3['pct'] = 100 / seeds_num
+    
+    df_piv4 = df_piv3.pivot_table(index=['dungeon_score','blue_warp','stone_heart'],values=['count','pct'],aggfunc=np.sum)
+    df_piv4['pct'] = df_piv4['pct'].apply(lambda x: round(x,2))
+    
+    display(HTML(df_piv4.to_html()))    
     
     
     '''
