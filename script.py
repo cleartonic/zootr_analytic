@@ -191,6 +191,7 @@ def b4():
     
     print("\nSubset for Skulltula House rewards:")
     df_piv2 = df_piv2[df_piv2.index.str.contains("Skulltula Reward")]
+    df_piv2 = df_piv2.reset_index().sort_values(by='location').set_index("location")
     display(HTML(df_piv2.to_html()))   
     
 

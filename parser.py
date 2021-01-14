@@ -298,6 +298,8 @@ truncate gossip_stones_songs;
 truncate gossip_stones_standard;
 truncate gossip_stones_standard_songs;
 truncate gossip_stones_woth;
+
+
 '''    
     
     
